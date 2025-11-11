@@ -1,5 +1,6 @@
 import React from 'react';
 import './ImageCard.css';
+import LazyImage from './LazyImage';
 
 interface ImageCardProps {
   imageUrl: string;
@@ -12,7 +13,7 @@ interface ImageCardProps {
 function ImageCard({ imageUrl, title, buttonText, onEdit, onDelete }: ImageCardProps) {
   return (
     <div className="image-card">
-      <img src={imageUrl} alt={title} className="card-image" />
+      <LazyImage src={imageUrl} alt={title} className="card-image" placeholderColor="#f0f0f0" />
       <h3 className="card-title">{title}</h3>
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="card-button" onClick={onEdit}>{buttonText}</button>
