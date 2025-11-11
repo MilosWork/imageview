@@ -9,32 +9,38 @@ interface LazyImageProps {
 
 const LazyImage: React.FC<LazyImageProps> = ({ src, alt, className, placeholderColor = '#e0e0e0' }) => {
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const [visibleSrc, setVisibleSrc] = useState<string | null>(null);
+  const [visibleSrc, setVisibleSrc] = useState<string | undefined>(undefined); // Set initial value to undefined instead of null
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-    if (!imgRef.current) return;
-
     const observer = new IntersectionObserver(
-      (entries) => {
+      (entries, observer) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting && mounted) {
+          if (entry.isIntersecting) {
             setVisibleSrc(src);
-            observer.disconnect();
+            observer.disconnect(); // Stop observing after the image is loaded
           }
         });
       },
       { rootMargin: '50px' }
     );
 
-    observer.observe(imgRef.current);
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
 
     return () => {
-      mounted = false;
       observer.disconnect();
     };
   }, [src]);
+
+  const handleImageLoad = () => {
+    setLoaded(true); // Set the state to true when the image has loaded
+  };
+
+  const handleImageError = () => {
+    setLoaded(true); // Set to true even if the image fails to load (you could customize this to handle errors differently)
+  };
 
   return (
     <img
@@ -42,9 +48,12 @@ const LazyImage: React.FC<LazyImageProps> = ({ src, alt, className, placeholderC
       src={visibleSrc ?? undefined}
       alt={alt}
       className={className}
-      onLoad={() => setLoaded(true)}
-      onError={() => setLoaded(true)}
-      style={{ backgroundColor: !loaded ? placeholderColor : 'transparent' }}
+      onLoad={handleImageLoad}
+      onError={handleImageError}
+      style={{
+        backgroundColor: !loaded ? placeholderColor : 'transparent', // Keep placeholder color visible until the image is loaded
+        transition: 'background-color 0.3s ease', // Smooth transition when loading the image
+      }}
     />
   );
 };

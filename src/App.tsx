@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
 import Header from "./components/Header";
 import ImageCard from "./components/ImageCard";
-import cardImage from "./image/3.jpg";
 
 type Card = {
-  id: number;
+  id: string;
   imageUrl: string;
   title: string;
   buttonText: string;
 };
 
-function App() {
+const App = () => {
   const [cards, setCards] = useState<Card[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -31,10 +30,11 @@ function App() {
 
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 
-  // load images from backend on mount
+  // Load images from backend on mount
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+
+    const loadImages = async () => {
       setIsLoadingImages(true);
       setLoadError(null);
       try {
@@ -42,20 +42,20 @@ function App() {
         if (!res.ok) throw new Error(`Failed to load images (${res.status})`);
         const data = await res.json();
         if (cancelled) return;
-        // map backend items to Card; backend may return imageUrl like '/uploads/xxx'
+
         const mapped: Card[] = (data || []).map((it: any) => {
           let url = it.imageUrl || '';
           if (url && url.startsWith('/')) {
-            // make absolute to backend
-            url = API_BASE.replace(/\/$/, '') + url;
+            url = `${API_BASE.replace(/\/$/, '')}${url}`;
           }
           return {
-            id: it.id,
+            id: String(it.id),
             title: it.title || 'Untitled',
             imageUrl: url,
             buttonText: 'Edit',
           };
         });
+
         setCards(mapped);
       } catch (err: any) {
         console.error('Failed to load images', err);
@@ -63,14 +63,14 @@ function App() {
       } finally {
         setIsLoadingImages(false);
       }
-    }
+    };
 
-    load();
+    loadImages();
     return () => { cancelled = true; };
   }, [API_BASE]);
 
+  // Create/revoke preview URL when file changes
   useEffect(() => {
-    // create/revoke preview URL when file changes
     if (!file) return;
     const url = URL.createObjectURL(file);
     setPreview(url);
@@ -80,11 +80,9 @@ function App() {
     };
   }, [file]);
 
-  const openAddDialog = () => {
-    setIsAddOpen(true);
-  };
+  const openAddDialog = () => setIsAddOpen(true);
 
-  function closeAddDialog() {
+  const closeAddDialog = () => {
     setIsAddOpen(false);
     if (preview) {
       try {
@@ -94,14 +92,14 @@ function App() {
     setFile(null);
     setPreview("");
     setNewTitle("");
-  }
+  };
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files && e.target.files[0];
     setFile(f || null);
-  }
+  };
 
-  async function handleAdd() {
+  const handleAdd = async () => {
     setUploadError(null);
     if (!file) {
       setUploadError('Please choose an image to upload.');
@@ -127,14 +125,13 @@ function App() {
 
       const item = await res.json();
 
-      // backend should return { id, title, imageUrl }
       let returnedUrl = item.imageUrl || preview || '';
       if (returnedUrl && returnedUrl.startsWith('/')) {
-        returnedUrl = API_BASE.replace(/\/$/, '') + returnedUrl;
+        returnedUrl = `${API_BASE.replace(/\/$/, '')}${returnedUrl}`;
       }
 
       const nextCard: Card = {
-        id: item.id ?? (cards.length ? Math.max(...cards.map((c) => c.id)) + 1 : 1),
+        id: String(item.id),
         title: item.title || newTitle || 'Untitled',
         imageUrl: returnedUrl,
         buttonText: 'Edit',
@@ -148,9 +145,9 @@ function App() {
     } finally {
       setIsUploading(false);
     }
-  }
+  };
 
-  async function handleDelete(id: number) {
+  const handleDelete = useCallback(async (id: string) => {
     if (!window.confirm('Delete this image?')) return;
     try {
       const res = await fetch(`${API_BASE}/api/images/${id}`, { method: 'DELETE' });
@@ -160,23 +157,23 @@ function App() {
       console.error('Delete error', err);
       alert(err?.message || 'Delete failed');
     }
-  }
+  }, [API_BASE]);
 
-  function openEditDialog(card: Card) {
+  const openEditDialog = (card: Card) => {
     setEditingCard(card);
     setEditTitle(card.title);
     setIsEditOpen(true);
     setUpdateError(null);
-  }
+  };
 
-  function closeEditDialog() {
+  const closeEditDialog = () => {
     setIsEditOpen(false);
     setEditingCard(null);
     setEditTitle("");
     setUpdateError(null);
-  }
+  };
 
-  async function handleUpdateTitle() {
+  const handleUpdateTitle = async () => {
     setUpdateError(null);
     if (!editingCard) return;
     const trimmedTitle = editTitle.trim();
@@ -198,7 +195,6 @@ function App() {
         throw new Error(body && body.error ? body.error : `Update failed (${res.status})`);
       }
 
-      // update the card in the grid
       setCards((prev) =>
         prev.map((c) => (c.id === editingCard.id ? { ...c, title: trimmedTitle } : c))
       );
@@ -209,7 +205,7 @@ function App() {
     } finally {
       setIsUpdating(false);
     }
-  }
+  };
 
   return (
     <div className="App">
@@ -252,17 +248,8 @@ function App() {
             />
 
             <div className="modal-actions">
-              <button
-                className="modal-button modal-cancel"
-                onClick={closeAddDialog}
-              >
-                Cancel
-              </button>
-              <button
-                className="modal-button modal-save"
-                onClick={handleAdd}
-                disabled={isUploading}
-              >
+              <button className="modal-button modal-cancel" onClick={closeAddDialog}>Cancel</button>
+              <button className="modal-button modal-save" onClick={handleAdd} disabled={isUploading}>
                 {isUploading ? 'Uploading...' : 'Save'}
               </button>
             </div>
@@ -287,17 +274,8 @@ function App() {
             />
 
             <div className="modal-actions">
-              <button
-                className="modal-button modal-cancel"
-                onClick={closeEditDialog}
-              >
-                Cancel
-              </button>
-              <button
-                className="modal-button modal-save"
-                onClick={handleUpdateTitle}
-                disabled={isUpdating}
-              >
+              <button className="modal-button modal-cancel" onClick={closeEditDialog}>Cancel</button>
+              <button className="modal-button modal-save" onClick={handleUpdateTitle} disabled={isUpdating}>
                 {isUpdating ? 'Saving...' : 'Save'}
               </button>
             </div>
@@ -307,6 +285,6 @@ function App() {
       )}
     </div>
   );
-}
+};
 
 export default App;

@@ -9,7 +9,7 @@ function Header({ onAdd }: HeaderProps) {
   return (
     <header className="App-header">
       <button className="header-button" onClick={onAdd}>
-        <b>+</b>Add New Image
+        Add New Image
       </button>
     </header>
   );

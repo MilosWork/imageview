@@ -10,11 +10,35 @@ const port = process.env.PORT || 4000;
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:3000' }));
 app.use(express.json());
 
-// In-memory array of images for demo purposes
-let images = [];
+// We'll persist image metadata to MongoDB using mongoose
+const mongoose = require('mongoose');
 
-app.get('/api/images', (req, res) => {
-  res.json(images);
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/imageview';
+
+mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('MongoDB connection error', err));
+
+const imageSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  imageUrl: { type: String, required: true },
+  filename: { type: String },
+  createdAt: { type: Date, default: Date.now },
+});
+
+const Image = mongoose.model('Image', imageSchema);
+
+// GET all images
+app.get('/api/images', async (req, res) => {
+  try {
+    const imgs = await Image.find().sort({ createdAt: 1 }).lean();
+    // return items with id as string for frontend convenience
+    const out = imgs.map((it) => ({ id: String(it._id), title: it.title, imageUrl: it.imageUrl }));
+    res.json(out);
+  } catch (err) {
+    console.error('Failed to fetch images', err);
+    res.status(500).json({ error: 'Failed to fetch images' });
+  }
 });
 
 // Setup multer for file uploads (stores files to backend/uploads)
@@ -30,53 +54,64 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-app.post('/api/upload', upload.single('image'), (req, res) => {
+app.post('/api/upload', upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const title = req.body.title || 'Untitled';
   const imageUrl = '/uploads/' + req.file.filename;
-  const item = { id: images.length ? images[images.length - 1].id + 1 : 1, title, imageUrl };
-  images.push(item);
-  res.json(item);
+  try {
+    const created = await Image.create({ title, imageUrl, filename: req.file.filename });
+    res.json({ id: String(created._id), title: created.title, imageUrl: created.imageUrl });
+  } catch (err) {
+    console.error('Failed to save image metadata', err);
+    res.status(500).json({ error: 'Failed to save metadata' });
+  }
 });
 
 // delete an image by id (remove metadata and the file on disk)
-app.delete('/api/images/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const idx = images.findIndex((it) => it.id === id);
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-
-  const item = images[idx];
-  // try to delete the file if it exists
+// delete an image by id (remove metadata and the file on disk)
+app.delete('/api/images/:id', async (req, res) => {
+  const id = req.params.id;
   try {
-    const filename = item.imageUrl ? path.basename(item.imageUrl) : null;
-    if (filename) {
-      const full = path.join(uploadDir, filename);
-      if (fs.existsSync(full)) {
-        fs.unlinkSync(full);
-      }
-    }
-  } catch (err) {
-    console.error('Failed to delete file for image', err);
-    // continue to remove metadata even if file deletion fails
-  }
+    const item = await Image.findById(id).lean();
+    if (!item) return res.status(404).json({ error: 'Not found' });
 
-  images.splice(idx, 1);
-  res.json({ success: true });
+    // try to delete the file if it exists
+    try {
+      const filename = item.imageUrl ? path.basename(item.imageUrl) : null;
+      if (filename) {
+        const full = path.join(uploadDir, filename);
+        if (fs.existsSync(full)) {
+          fs.unlinkSync(full);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete file for image', err);
+    }
+
+    await Image.deleteOne({ _id: id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete error', err);
+    res.status(500).json({ error: 'Delete failed' });
+  }
 });
 
 // update an image's title by id
-app.put('/api/images/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
+// update an image's title by id
+app.put('/api/images/:id', async (req, res) => {
+  const id = req.params.id;
   const { title } = req.body;
   if (!title || typeof title !== 'string') {
     return res.status(400).json({ error: 'Title is required and must be a string' });
   }
-
-  const item = images.find((it) => it.id === id);
-  if (!item) return res.status(404).json({ error: 'Not found' });
-
-  item.title = title.trim();
-  res.json(item);
+  try {
+    const updated = await Image.findByIdAndUpdate(id, { title: title.trim() }, { new: true }).lean();
+    if (!updated) return res.status(404).json({ error: 'Not found' });
+    res.json({ id: String(updated._id), title: updated.title, imageUrl: updated.imageUrl });
+  } catch (err) {
+    console.error('Update error', err);
+    res.status(500).json({ error: 'Update failed' });
+  }
 });
 
 // Serve uploaded files statically

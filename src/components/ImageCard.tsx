@@ -10,7 +10,8 @@ interface ImageCardProps {
   onDelete?: () => void;
 }
 
-function ImageCard({ imageUrl, title, buttonText, onEdit, onDelete }: ImageCardProps) {
+const ImageCard: React.FC<ImageCardProps> = ({ imageUrl, title, buttonText, onEdit, onDelete }) => {
+  
   return (
     <div className="image-card">
       <LazyImage src={imageUrl} alt={title} className="card-image" placeholderColor="#f0f0f0" />
@@ -23,4 +24,4 @@ function ImageCard({ imageUrl, title, buttonText, onEdit, onDelete }: ImageCardP
   );
 }
 
-export default ImageCard;
+export default React.memo(ImageCard);
