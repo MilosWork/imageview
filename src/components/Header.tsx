@@ -1,10 +1,16 @@
 import React from 'react';
 import './Header.css';
 
-function Header() {
+interface HeaderProps {
+  onAdd?: () => void;
+}
+
+function Header({ onAdd }: HeaderProps) {
   return (
     <header className="App-header">
-      <button className="header-button">Button</button>
+      <button className="header-button" onClick={onAdd}>
+        <b>+</b>Add New Image
+      </button>
     </header>
   );
 }

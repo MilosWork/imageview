@@ -34,3 +34,40 @@
   font-size: 16px;
   margin-left: auto;
 }
+
+/* Modal styles used by the add-image dialog */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 8px;
+  max-width: 520px;
+  width: 96%;
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-image {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.modal-label { font-size: 13px; color: #333; }
+.modal-input { padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.modal-button { padding: 8px 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: 600; }
+.modal-cancel { background: #eee; color: #333; }
+.modal-save { background: #61dafb; color: #fff; }
