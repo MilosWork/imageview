@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
 const cors = require('cors');
 const app = express();
@@ -35,6 +36,46 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   const imageUrl = '/uploads/' + req.file.filename;
   const item = { id: images.length ? images[images.length - 1].id + 1 : 1, title, imageUrl };
   images.push(item);
+  res.json(item);
+});
+
+// delete an image by id (remove metadata and the file on disk)
+app.delete('/api/images/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const idx = images.findIndex((it) => it.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+
+  const item = images[idx];
+  // try to delete the file if it exists
+  try {
+    const filename = item.imageUrl ? path.basename(item.imageUrl) : null;
+    if (filename) {
+      const full = path.join(uploadDir, filename);
+      if (fs.existsSync(full)) {
+        fs.unlinkSync(full);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to delete file for image', err);
+    // continue to remove metadata even if file deletion fails
+  }
+
+  images.splice(idx, 1);
+  res.json({ success: true });
+});
+
+// update an image's title by id
+app.put('/api/images/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { title } = req.body;
+  if (!title || typeof title !== 'string') {
+    return res.status(400).json({ error: 'Title is required and must be a string' });
+  }
+
+  const item = images.find((it) => it.id === id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+
+  item.title = title.trim();
   res.json(item);
 });
 

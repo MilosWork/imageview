@@ -12,12 +12,9 @@ type Card = {
 };
 
 function App() {
-  const [cards, setCards] = useState<Card[]>([
-    { id: 1, imageUrl: cardImage, title: "Card 1", buttonText: "Edit" },
-    { id: 2, imageUrl: cardImage, title: "Card 2", buttonText: "Edit" },
-    { id: 3, imageUrl: cardImage, title: "Card 3", buttonText: "Edit" },
-    { id: 4, imageUrl: cardImage, title: "Card 4", buttonText: "Edit" },
-  ]);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -25,7 +22,52 @@ function App() {
   const [newTitle, setNewTitle] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+
+  // load images from backend on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setIsLoadingImages(true);
+      setLoadError(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/images`);
+        if (!res.ok) throw new Error(`Failed to load images (${res.status})`);
+        const data = await res.json();
+        if (cancelled) return;
+        // map backend items to Card; backend may return imageUrl like '/uploads/xxx'
+        const mapped: Card[] = (data || []).map((it: any) => {
+          let url = it.imageUrl || '';
+          if (url && url.startsWith('/')) {
+            // make absolute to backend
+            url = API_BASE.replace(/\/$/, '') + url;
+          }
+          return {
+            id: it.id,
+            title: it.title || 'Untitled',
+            imageUrl: url,
+            buttonText: 'Edit',
+          };
+        });
+        setCards(mapped);
+      } catch (err: any) {
+        console.error('Failed to load images', err);
+        setLoadError(err?.message || 'Failed to load images');
+      } finally {
+        setIsLoadingImages(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [API_BASE]);
 
   useEffect(() => {
     // create/revoke preview URL when file changes
@@ -86,10 +128,15 @@ function App() {
       const item = await res.json();
 
       // backend should return { id, title, imageUrl }
+      let returnedUrl = item.imageUrl || preview || '';
+      if (returnedUrl && returnedUrl.startsWith('/')) {
+        returnedUrl = API_BASE.replace(/\/$/, '') + returnedUrl;
+      }
+
       const nextCard: Card = {
         id: item.id ?? (cards.length ? Math.max(...cards.map((c) => c.id)) + 1 : 1),
         title: item.title || newTitle || 'Untitled',
-        imageUrl: item.imageUrl || preview || '',
+        imageUrl: returnedUrl,
         buttonText: 'Edit',
       };
 
@@ -103,10 +150,73 @@ function App() {
     }
   }
 
+  async function handleDelete(id: number) {
+    if (!window.confirm('Delete this image?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/images/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      setCards((prev) => prev.filter((c) => c.id !== id));
+    } catch (err: any) {
+      console.error('Delete error', err);
+      alert(err?.message || 'Delete failed');
+    }
+  }
+
+  function openEditDialog(card: Card) {
+    setEditingCard(card);
+    setEditTitle(card.title);
+    setIsEditOpen(true);
+    setUpdateError(null);
+  }
+
+  function closeEditDialog() {
+    setIsEditOpen(false);
+    setEditingCard(null);
+    setEditTitle("");
+    setUpdateError(null);
+  }
+
+  async function handleUpdateTitle() {
+    setUpdateError(null);
+    if (!editingCard) return;
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) {
+      setUpdateError("Title cannot be empty");
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/images/${editingCard.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: trimmedTitle }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body && body.error ? body.error : `Update failed (${res.status})`);
+      }
+
+      // update the card in the grid
+      setCards((prev) =>
+        prev.map((c) => (c.id === editingCard.id ? { ...c, title: trimmedTitle } : c))
+      );
+      closeEditDialog();
+    } catch (err: any) {
+      console.error('Update error', err);
+      setUpdateError(err?.message || 'Update failed');
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   return (
     <div className="App">
       <Header onAdd={openAddDialog} />
       <main className="app-body">
+        {isLoadingImages && <div style={{ textAlign: 'center', marginBottom: 12 }}>Loading images...</div>}
+        {loadError && <div style={{ color: 'crimson', textAlign: 'center', marginBottom: 12 }}>{loadError}</div>}
         <div className="cards-container">
           {cards.map((card) => (
             <ImageCard
@@ -114,6 +224,8 @@ function App() {
               imageUrl={card.imageUrl}
               title={card.title}
               buttonText={card.buttonText}
+              onEdit={() => openEditDialog(card)}
+              onDelete={() => handleDelete(card.id)}
             />
           ))}
         </div>
@@ -155,6 +267,41 @@ function App() {
               </button>
             </div>
             {uploadError && <div style={{ color: 'crimson', marginTop: 8 }}>{uploadError}</div>}
+          </div>
+        </div>
+      )}
+
+      {isEditOpen && editingCard && (
+        <div className="modal-overlay" onClick={closeEditDialog}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Edit Image Title</h3>
+
+            <img src={editingCard.imageUrl} alt={editingCard.title} className="modal-image" />
+
+            <label className="modal-label">Title</label>
+            <input
+              className="modal-input"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Enter new title"
+            />
+
+            <div className="modal-actions">
+              <button
+                className="modal-button modal-cancel"
+                onClick={closeEditDialog}
+              >
+                Cancel
+              </button>
+              <button
+                className="modal-button modal-save"
+                onClick={handleUpdateTitle}
+                disabled={isUpdating}
+              >
+                {isUpdating ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+            {updateError && <div style={{ color: 'crimson', marginTop: 8 }}>{updateError}</div>}
           </div>
         </div>
       )}
