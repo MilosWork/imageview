@@ -1,9 +1,6 @@
 import React from 'react';
 import './Header.css';
-
-interface HeaderProps {
-  onAdd?: () => void;
-}
+import { HeaderProps } from '../types';
 
 function Header({ onAdd }: HeaderProps) {
   return (

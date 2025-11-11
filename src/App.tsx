@@ -2,13 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import "./App.css";
 import Header from "./components/Header";
 import ImageCard from "./components/ImageCard";
-
-type Card = {
-  id: string;
-  imageUrl: string;
-  title: string;
-  buttonText: string;
-};
+import { Card } from './types';
 
 const App = () => {
   const [cards, setCards] = useState<Card[]>([]);

@@ -1,14 +1,7 @@
 import React from 'react';
 import './ImageCard.css';
 import LazyImage from './LazyImage';
-
-interface ImageCardProps {
-  imageUrl: string;
-  title: string;
-  buttonText: string;
-  onEdit?: () => void;
-  onDelete?: () => void;
-}
+import { ImageCardProps } from '../types';
 
 const ImageCard: React.FC<ImageCardProps> = ({ imageUrl, title, buttonText, onEdit, onDelete }) => {
   
